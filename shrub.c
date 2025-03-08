@@ -68,16 +68,21 @@ char* execute_command(const char* command) {
     fp = popen(command, "r");
     if (fp == NULL) {
         fprintf(stderr, "Failed to execute command: %s\n", command);
-        exit(EXIT_FAILURE);
+        return buffer;
     }
     
     while (fgets(line, sizeof(line), fp) != NULL) {
         strcat(buffer, line);
     }
     
-    pclose(fp);
+    int status = pclose(fp);
+    if (status != 0) {
+        fprintf(stderr, "Command exited with status %d: %s\n", status, command);
+    }
+    
     return buffer;
 }
+
 
 // Function to parse git log and fill the commits array
 void parse_git_log() {
@@ -85,148 +90,181 @@ void parse_git_log() {
     char *log_output;
     char *line, *next_line;
     
-    // Custom git log format that includes all the info we need
+    // Modify the git log format to be more reliable
+    // Use a custom separator that's unlikely to appear in commit messages
     snprintf(command, MAX_COMMAND_LENGTH, 
-             "git log --all --date=iso --pretty=format:\"%%H|%%h|%%s|%%an|%%ad|%%P|%%D\" --graph");
+             "git log --all --date=iso --pretty=format:\"COMMIT_SEP%%H|%%h|%%s|%%an|%%ad|%%P|%%D\" --graph");
+    
+    printf("Executing: %s\n", command);  // Debug output
     
     log_output = execute_command(command);
     
+    // Check if we got any output
+    if (log_output == NULL || strlen(log_output) < 10) {
+        printf("Error: Failed to get git log output\n");
+        return;
+    }
+    
     line = strtok_r(log_output, "\n", &next_line);
     while (line != NULL && commit_count < MAX_COMMITS) {
-        if (strstr(line, "|")) {
-            char *token;
-            char *rest = line;
-            int field = 0;
-            
-            // Skip the graph part
-            while (*rest != '|' && *rest != '\0') {
-                if (*rest == '*') {
-                    // This line represents a commit
-                    commits[commit_count].is_merge = 0;
-                    break;
-                } else if (*rest == '\\' || *rest == '/' || *rest == '|') {
-                    // Just a graph character
-                } else if (strstr(rest, "Merge")) {
-                    commits[commit_count].is_merge = 1;
-                    break;
-                }
-                rest++;
-            }
-            
-            if (*rest == '|') {
-                rest++;  // Skip the first '|'
+        if (strstr(line, "COMMIT_SEP") != NULL) {
+            char *commit_part = strstr(line, "COMMIT_SEP");
+            if (commit_part) {
+                commit_part += 10; // Skip "COMMIT_SEP"
                 
                 // Parse the fields
-                while ((token = strtok_r(rest, "|", &rest)) != NULL && field < 7) {
-                    switch (field) {
-                        case 0: // Full hash
-                            strncpy(commits[commit_count].hash, token, 40);
-                            commits[commit_count].hash[40] = '\0';
-                            break;
-                        case 1: // Short hash
-                            strncpy(commits[commit_count].short_hash, token, 7);
-                            commits[commit_count].short_hash[7] = '\0';
-                            break;
-                        case 2: // Subject
-                            strncpy(commits[commit_count].subject, token, 255);
-                            commits[commit_count].subject[255] = '\0';
-                            
-                            // Check if it's a PR
-                            if (strstr(token, "Merge pull request") || 
-                                strstr(token, "Merge PR") || 
-                                strstr(token, "Pull request")) {
-                                commits[commit_count].is_pr = 1;
-                                
-                                // Extract PR number
-                                char *pr_start = strstr(token, "#");
-                                if (pr_start) {
-                                    char pr_num[16] = {0};
-                                    int i = 0;
-                                    pr_start++; // Skip the '#'
-                                    while (*pr_start && *pr_start != ' ' && *pr_start != ')' && i < 15) {
-                                        pr_num[i++] = *pr_start++;
-                                    }
-                                    pr_num[i] = '\0';
-                                    strcpy(commits[commit_count].pr_number, pr_num);
-                                }
-                            } else {
-                                commits[commit_count].is_pr = 0;
-                                commits[commit_count].pr_number[0] = '\0';
-                            }
-                            break;
-                        case 3: // Author
-                            strncpy(commits[commit_count].author, token, 127);
-                            commits[commit_count].author[127] = '\0';
-                            break;
-                        case 4: // Date
-                            strncpy(commits[commit_count].date, token, DATE_LENGTH-1);
-                            commits[commit_count].date[DATE_LENGTH-1] = '\0';
-                            
-                            // Convert to timestamp for sorting
-                            struct tm tm = {0};
-                            strptime(token, "%Y-%m-%d %H:%M:%S %z", &tm);
-                            commits[commit_count].timestamp = mktime(&tm);
-                            break;
-                        case 5: // Parent hashes
-                            commits[commit_count].parent_count = 0;
-                            if (strlen(token) > 0) {
-                                char *parent_token;
-                                char *parent_rest = token;
-                                
-                                while ((parent_token = strtok_r(parent_rest, " ", &parent_rest)) != NULL && 
-                                       commits[commit_count].parent_count < 5) {
-                                    strncpy(commits[commit_count].parent_hashes[commits[commit_count].parent_count], 
-                                            parent_token, 40);
-                                    commits[commit_count].parent_hashes[commits[commit_count].parent_count][40] = '\0';
-                                    commits[commit_count].parent_count++;
-                                }
-                            }
-                            
-                            // If it has more than one parent, it's a merge commit
-                            if (commits[commit_count].parent_count > 1) {
-                                commits[commit_count].is_merge = 1;
-                            }
-                            break;
-                        case 6: // Refs (branches, tags)
-                            if (token && strlen(token) > 0) {
-                                strncpy(commits[commit_count].refs, token, 255);
-                                commits[commit_count].refs[255] = '\0';
-                                
-                                // Extract branch names
-                                char *branch_start = token;
-                                while ((branch_start = strstr(branch_start, "refs/heads/")) != NULL) {
-                                    branch_start += 11; // Skip "refs/heads/"
-                                    
-                                    if (branch_count < MAX_BRANCHES) {
-                                        int i = 0;
-                                        while (branch_start[i] != ',' && branch_start[i] != '\0' && branch_start[i] != ' ' && i < 127) {
-                                            branches[branch_count].name[i] = branch_start[i];
-                                            i++;
-                                        }
-                                        branches[branch_count].name[i] = '\0';
-                                        strcpy(branches[branch_count].hash, commits[commit_count].hash);
-                                        branches[branch_count].color = branch_count % COLOR_COUNT;
-                                        branch_count++;
-                                    }
-                                    
-                                    branch_start++;
-                                }
-                            } else {
-                                commits[commit_count].refs[0] = '\0';
-                            }
-                            break;
+                char *hash = strtok(commit_part, "|");
+                if (hash) {
+                    strncpy(commits[commit_count].hash, hash, 40);
+                    commits[commit_count].hash[40] = '\0';
+                    
+                    char *short_hash = strtok(NULL, "|");
+                    if (short_hash) {
+                        strncpy(commits[commit_count].short_hash, short_hash, 7);
+                        commits[commit_count].short_hash[7] = '\0';
                     }
-                    field++;
+                    
+                    char *subject = strtok(NULL, "|");
+                    if (subject) {
+                        strncpy(commits[commit_count].subject, subject, 255);
+                        commits[commit_count].subject[255] = '\0';
+                        
+                        // Check if it's a PR
+                        if (strstr(subject, "Merge pull request") || 
+                            strstr(subject, "Merge PR") || 
+                            strstr(subject, "Pull request")) {
+                            commits[commit_count].is_pr = 1;
+                            
+                            // Extract PR number
+                            char *pr_start = strstr(subject, "#");
+                            if (pr_start) {
+                                char pr_num[16] = {0};
+                                int i = 0;
+                                pr_start++; // Skip the '#'
+                                while (*pr_start && *pr_start != ' ' && *pr_start != ')' && i < 15) {
+                                    pr_num[i++] = *pr_start++;
+                                }
+                                pr_num[i] = '\0';
+                                strcpy(commits[commit_count].pr_number, pr_num);
+                            }
+                        } else {
+                            commits[commit_count].is_pr = 0;
+                            commits[commit_count].pr_number[0] = '\0';
+                        }
+                    }
+                    
+                    char *author = strtok(NULL, "|");
+                    if (author) {
+                        strncpy(commits[commit_count].author, author, 127);
+                        commits[commit_count].author[127] = '\0';
+                    }
+                    
+                    char *date = strtok(NULL, "|");
+                    if (date) {
+                        strncpy(commits[commit_count].date, date, DATE_LENGTH-1);
+                        commits[commit_count].date[DATE_LENGTH-1] = '\0';
+                        
+                        // Convert to timestamp for sorting
+                        struct tm tm = {0};
+                        if (strptime(date, "%Y-%m-%d %H:%M:%S %z", &tm) != NULL) {
+                            commits[commit_count].timestamp = mktime(&tm);
+                        } else {
+                            // Fallback if date parsing fails
+                            commits[commit_count].timestamp = time(NULL);
+                        }
+                    }
+                    
+                    char *parents = strtok(NULL, "|");
+                    if (parents) {
+                        commits[commit_count].parent_count = 0;
+                        if (strlen(parents) > 0) {
+                            char *parent_token;
+                            char parents_copy[256];
+                            strncpy(parents_copy, parents, 255);
+                            parents_copy[255] = '\0';
+                            
+                            parent_token = strtok(parents_copy, " ");
+                            while (parent_token != NULL && commits[commit_count].parent_count < 5) {
+                                strncpy(commits[commit_count].parent_hashes[commits[commit_count].parent_count], 
+                                        parent_token, 40);
+                                commits[commit_count].parent_hashes[commits[commit_count].parent_count][40] = '\0';
+                                commits[commit_count].parent_count++;
+                                parent_token = strtok(NULL, " ");
+                            }
+                        }
+                        
+                        // If it has more than one parent, it's a merge commit
+                        if (commits[commit_count].parent_count > 1) {
+                            commits[commit_count].is_merge = 1;
+                        } else {
+                            commits[commit_count].is_merge = 0;
+                        }
+                    }
+                    
+                    char *refs = strtok(NULL, "|");
+                    if (refs) {
+                        if (refs && strlen(refs) > 0) {
+                            strncpy(commits[commit_count].refs, refs, 255);
+                            commits[commit_count].refs[255] = '\0';
+                            
+                            // Extract branch names
+                            if (strstr(refs, "HEAD -> ")) {
+                                char *branch_start = strstr(refs, "HEAD -> ");
+                                branch_start += 8; // Skip "HEAD -> "
+                                
+                                if (branch_count < MAX_BRANCHES) {
+                                    int i = 0;
+                                    while (branch_start[i] != ',' && branch_start[i] != '\0' && branch_start[i] != ' ' && i < 127) {
+                                        branches[branch_count].name[i] = branch_start[i];
+                                        i++;
+                                    }
+                                    branches[branch_count].name[i] = '\0';
+                                    strcpy(branches[branch_count].hash, commits[commit_count].hash);
+                                    branches[branch_count].color = branch_count % COLOR_COUNT;
+                                    branch_count++;
+                                }
+                            }
+                            
+                            // Also check for refs/heads/ branches
+                            char *branch_ref = refs;
+                            while ((branch_ref = strstr(branch_ref, "refs/heads/")) != NULL) {
+                                branch_ref += 11; // Skip "refs/heads/"
+                                
+                                if (branch_count < MAX_BRANCHES) {
+                                    int i = 0;
+                                    while (branch_ref[i] != ',' && branch_ref[i] != '\0' && branch_ref[i] != ' ' && i < 127) {
+                                        branches[branch_count].name[i] = branch_ref[i];
+                                        i++;
+                                    }
+                                    branches[branch_count].name[i] = '\0';
+                                    strcpy(branches[branch_count].hash, commits[commit_count].hash);
+                                    branches[branch_count].color = branch_count % COLOR_COUNT;
+                                    branch_count++;
+                                }
+                                
+                                branch_ref++;
+                            }
+                        } else {
+                            commits[commit_count].refs[0] = '\0';
+                        }
+                    }
+                    
+                    commit_count++;
                 }
-                
-                commit_count++;
             }
         }
         
         line = strtok_r(NULL, "\n", &next_line);
     }
     
-    printf("Parsed %d commits and %d branches\n", commit_count, branch_count);
+    // Add debug output
+    if (commit_count == 0) {
+        printf("No commits were parsed. Debug info:\n");
+        printf("Git command output length: %zu\n", strlen(log_output));
+        printf("First 100 chars of output: %.100s\n", log_output);
+    } else {
+        printf("Successfully parsed %d commits and %d branches\n", commit_count, branch_count);
+    }
 }
 
 // Assign horizontal positions to branches
@@ -427,19 +465,27 @@ void print_commit_tree() {
 }
 
 int main(int argc, char *argv[]) {
-    // Check if we're in a git repository
-    if (access(".git", F_OK) != 0) {
-        char *git_dir = execute_command("git rev-parse --git-dir 2>/dev/null");
-        if (strlen(git_dir) == 0 || strstr(git_dir, "not a git repository") != NULL) {
-            fprintf(stderr, "Error: Not a git repository\n");
-            return EXIT_FAILURE;
-        }
+    // Check if git repository
+    char *git_dir = execute_command("git rev-parse --git-dir 2>/dev/null");
+    if (strlen(git_dir) == 0 || strstr(git_dir, "fatal:") != NULL) {
+        fprintf(stderr, "Error: Not a git repository\n");
+        return EXIT_FAILURE;
+    }
+    
+    // Check if repo has any commits
+    char *commit_count_str = execute_command("git rev-list --count HEAD 2>/dev/null");
+    if (strlen(commit_count_str) == 0 || strstr(commit_count_str, "fatal:") != NULL || atoi(commit_count_str) == 0) {
+        fprintf(stderr, "Error: This repository has no commits\n");
+        return EXIT_FAILURE;
     }
     
     parse_git_log();
-    assign_branch_positions();
-    assign_commit_positions();
-    print_commit_tree();
+    
+    if (commit_count > 0) {
+        assign_branch_positions();
+        assign_commit_positions();
+        print_commit_tree();
+    }
     
     return EXIT_SUCCESS;
 }
