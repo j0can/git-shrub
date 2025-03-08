@@ -1,0 +1,17 @@
+# Compiled binary
+git-shrub
+
+# Object files
+*.o
+*.ko
+*.obj
+*.elf
+
+# Build directory
+build/
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*~
