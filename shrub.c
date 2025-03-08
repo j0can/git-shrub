@@ -9,6 +9,7 @@
 #define MAX_BRANCHES 100
 #define MAX_COMMITS 10000
 #define DATE_LENGTH 30
+#define DEBUG 0
 
 typedef struct {
     char hash[41];
@@ -95,7 +96,9 @@ void parse_git_log() {
     snprintf(command, MAX_COMMAND_LENGTH, 
              "git log --all --date=iso --pretty=format:\"COMMIT_SEP%%H|%%h|%%s|%%an|%%ad|%%P|%%D\" --graph");
     
-    printf("Executing: %s\n", command);  // Debug output
+    if (DEBUG) {
+    printf("Executing: %s\n", command);  // Debug output 
+    }
     
     log_output = execute_command(command);
     
@@ -263,7 +266,9 @@ void parse_git_log() {
         printf("Git command output length: %zu\n", strlen(log_output));
         printf("First 100 chars of output: %.100s\n", log_output);
     } else {
-        printf("Successfully parsed %d commits and %d branches\n", commit_count, branch_count);
+    if (DEBUG) {
+    fprintf(stderr, "Successfully parsed %d commits and %d branches\n", commit_count, branch_count);
+    }
     }
 }
 
