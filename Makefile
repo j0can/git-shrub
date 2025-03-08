@@ -1,5 +1,7 @@
 CC = gcc
 CFLAGS = -Wall -Wextra
+PREFIX = /usr/local
+DESTDIR =
 
 all: git-shrub
 
