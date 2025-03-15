@@ -18,6 +18,13 @@ if ! command -v gcc &> /dev/null; then
     exit 1
 fi
 
+# Check for make
+if ! command -v make &> /dev/null; then
+    echo -e "${RED}Error: make is not installed.${NC}"
+    echo "Please install make before continuing."
+    exit 1
+fi
+
 # Define installation directories
 SYSTEM_BIN="/usr/local/bin"
 USER_BIN="$HOME/.local/bin"
@@ -25,10 +32,8 @@ USER_BIN_ALT="$HOME/bin"
 
 # Compile the program
 echo -e "\n${YELLOW}Compiling Git Shrub...${NC}"
-gcc -Wall -O2 -o git-shrub shrub.c
-
-# Make it executable
-chmod +x git-shrub
+make clean
+make
 
 # Determine installation location
 echo -e "\n${YELLOW}Selecting installation location...${NC}"
@@ -45,22 +50,21 @@ INSTALL_OPTION=${INSTALL_OPTION:-2}
 
 case $INSTALL_OPTION in
     1)
-        INSTALL_DIR="${SYSTEM_BIN}"
+        PREFIX="${SYSTEM_BIN}"
         USE_SUDO=1
         ;;
     2)
-        INSTALL_DIR="${USER_BIN}"
+        PREFIX="${USER_BIN}"
         USE_SUDO=0
         ;;
     3)
-        INSTALL_DIR="${USER_BIN_ALT}"
+        PREFIX="${USER_BIN_ALT}"
         USE_SUDO=0
         ;;
     4)
         read -p "Enter custom installation directory: " CUSTOM_DIR
-        INSTALL_DIR="${CUSTOM_DIR}"
-        # Check if we need sudo for the custom directory
-        if [[ ! -w $(dirname "$INSTALL_DIR") ]]; then
+        PREFIX="${CUSTOM_DIR}"
+        if [[ ! -w $(dirname "$PREFIX") ]]; then
             USE_SUDO=1
         else
             USE_SUDO=0
@@ -72,28 +76,19 @@ case $INSTALL_OPTION in
         ;;
 esac
 
-# Create directory if it doesn't exist
-echo -e "\n${YELLOW}Installing to ${INSTALL_DIR}...${NC}"
+# Install using make
+echo -e "\n${YELLOW}Installing to ${PREFIX}...${NC}"
 
-if [[ ! -d "$INSTALL_DIR" ]]; then
-    if [[ $USE_SUDO -eq 1 ]]; then
-        sudo mkdir -p "$INSTALL_DIR"
-    else
-        mkdir -p "$INSTALL_DIR"
-    fi
-fi
-
-# Copy the executable
 if [[ $USE_SUDO -eq 1 ]]; then
-    sudo cp git-shrub "$INSTALL_DIR/"
+    sudo make install PREFIX="${PREFIX}"
 else
-    cp git-shrub "$INSTALL_DIR/"
+    make install PREFIX="${PREFIX}"
 fi
 
 # Check if installation directory is in PATH
 PATH_UPDATED=0
-if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
-    echo -e "\n${YELLOW}Adding $INSTALL_DIR to your PATH...${NC}"
+if [[ ":$PATH:" != *":$PREFIX:"* ]]; then
+    echo -e "\n${YELLOW}Adding $PREFIX to your PATH...${NC}"
     
     # Determine which shell config file to update
     if [[ $SHELL == */zsh ]]; then
@@ -115,14 +110,11 @@ if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
     fi
     
     # Add to PATH in shell config
-    echo "export PATH=\"\$PATH:$INSTALL_DIR\"" >> "$SHELL_CONFIG"
+    echo "export PATH=\"\$PATH:$PREFIX\"" >> "$SHELL_CONFIG"
     PATH_UPDATED=1
     
-    echo -e "${GREEN}Added $INSTALL_DIR to PATH in $SHELL_CONFIG${NC}"
+    echo -e "${GREEN}Added $PREFIX to PATH in $SHELL_CONFIG${NC}"
 fi
-
-# Clean up
-rm -f git-shrub
 
 echo -e "\n${GREEN}Installation complete!${NC}"
 
