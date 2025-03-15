@@ -45,6 +45,8 @@ typedef struct {
 // Then declare function prototypes
 void determine_commit_type(Commit *commit);
 void print_graph_lines(Commit *commit, Branch *branches);
+void print_usage();
+int handle_reset_latest();
 
 Commit commits[MAX_COMMITS];
 Branch branches[MAX_BRANCHES];
@@ -525,12 +527,63 @@ void print_graph_lines(Commit *commit, Branch *branches) {
     }
 }
 
+int handle_reset_latest() {
+    // Get the latest commit hash
+    char *latest_commit = execute_command("git rev-parse HEAD");
+    if (strlen(latest_commit) == 0 || strstr(latest_commit, "fatal:") != NULL) {
+        fprintf(stderr, "Error: Failed to get latest commit\n");
+        return EXIT_FAILURE;
+    }
+    
+    // Remove newline from commit hash
+    latest_commit[strcspn(latest_commit, "\n")] = 0;
+    
+    // Create the reset command - using --soft to preserve changes
+    char reset_cmd[MAX_COMMAND_LENGTH];
+    snprintf(reset_cmd, MAX_COMMAND_LENGTH, "git reset --soft HEAD~1");
+    
+    // Execute the reset
+    char *reset_result = execute_command(reset_cmd);
+    if (strstr(reset_result, "fatal:") != NULL) {
+        fprintf(stderr, "Error: Failed to reset to previous commit\n");
+        return EXIT_FAILURE;
+    }
+    
+    printf("Successfully unstaged commit: %s\n", latest_commit);
+    printf("Your changes have been preserved and are ready to be committed again.\n");
+    printf("You can now modify your changes and create a new commit using:\n");
+    printf("  git add .\n");
+    printf("  git commit -m \"Your new commit message\"\n");
+    return EXIT_SUCCESS;
+}
+
+void print_usage() {
+    printf("Usage: git shrub [options]\n\n");
+    printf("Options:\n");
+    printf("  -reset latest    Unstage the latest commit (preserves changes)\n");
+    printf("  (no options)     Display the commit tree\n");
+}
+
 int main(int argc, char *argv[]) {
     // Check if git repository
     char *git_dir = execute_command("git rev-parse --git-dir 2>/dev/null");
     if (strlen(git_dir) == 0 || strstr(git_dir, "fatal:") != NULL) {
         fprintf(stderr, "Error: Not a git repository\n");
         return EXIT_FAILURE;
+    }
+    
+    // Handle command line arguments
+    if (argc > 1) {
+        if (strcmp(argv[1], "-reset") == 0) {
+            if (argc != 3 || strcmp(argv[2], "latest") != 0) {
+                print_usage();
+                return EXIT_FAILURE;
+            }
+            return handle_reset_latest();
+        } else {
+            print_usage();
+            return EXIT_FAILURE;
+        }
     }
     
     // Check if repo has any commits
