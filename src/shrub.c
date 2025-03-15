@@ -635,15 +635,19 @@ void determine_commit_type(Commit *commit) {
 
 void print_commit_line(Commit *commit, Branch *branches, int branch_count) {
     // Print graph connection lines
-    print_graph_lines(commit, branches);
+    print_graph_lines(commit, NULL);  // We don't use branches here
+    
+    // Get branch color from branch_index
+    int color_index = (branch_count > 0 && commit->branch_index < branch_count) ? 
+                     branches[commit->branch_index].color : 0;
     
     // Print commit symbol with color
-    printf("%s%s%s ", colors[branches[commit->branch_index].color], 
+    printf("%s%s%s ", colors[color_index], 
            commit->symbol, RESET_COLOR);
            
     // Print commit info
     printf("%s %.7s%s %s", 
-           colors[branches[commit->branch_index].color],
+           colors[color_index],
            commit->hash,
            RESET_COLOR,
            commit->subject);
@@ -659,6 +663,7 @@ void print_commit_line(Commit *commit, Branch *branches, int branch_count) {
 
 // Add print_graph_lines implementation
 void print_graph_lines(Commit *commit, Branch *branches) {
+    (void)branches;  // Explicitly mark branches as unused
     for (int i = 0; i < commit->x_pos; i++) {
         printf("│ ");
     }
