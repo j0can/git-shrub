@@ -27,6 +27,7 @@ typedef struct {
     char hash[41];
     char short_hash[8];
     char subject[256];
+    char full_message[4096];  // Added to store full commit message
     char author[128];
     char date[DATE_LENGTH];
     time_t timestamp;
@@ -104,11 +105,10 @@ void parse_git_log() {
     char *log_output;
     char *line, *next_line;
     
-    // Modify the git log format to be more reliable
-    // Use a custom separator that's unlikely to appear in commit messages
+    // Modified format to include full commit message
     snprintf(command, MAX_COMMAND_LENGTH, 
              "git log --all --graph --date=iso"
-             " --pretty=format:\"COMMIT_SEP%%H|%%h|%%s|%%an|%%ad|%%P|%%D\""
+             " --pretty=format:\"COMMIT_SEP%%H|%%h|%%s|%%an|%%ad|%%P|%%D|%%B\""
              " --date-order --color=always");
     
     if (DEBUG) {
@@ -267,6 +267,13 @@ void parse_git_log() {
                         }
                     }
                     
+                    // Parse full commit message
+                    char *full_message = strtok(NULL, "|");
+                    if (full_message) {
+                        strncpy(commits[commit_count].full_message, full_message, 4095);
+                        commits[commit_count].full_message[4095] = '\0';
+                    }
+                    
                     determine_commit_type(&commits[commit_count]);
                     commit_count++;
                 }
@@ -376,28 +383,58 @@ void print_commit_tree() {
     }
     
     // Create a buffer for the entire output
-    char *output_buffer = malloc(MAX_COMMITS * MAX_LINE_LENGTH);
+    char *output_buffer = malloc(MAX_COMMITS * MAX_LINE_LENGTH * 4);
     output_buffer[0] = '\0';
     
     // Print the tree
     int y = 0;
     while (y < commit_count) {
-        char line[1024] = {0};
+        char line[4096] = {0};
         int branch_lines[MAX_BRANCHES] = {0};
+        int child_connections[MAX_BRANCHES][MAX_BRANCHES] = {0};
         
-        // Mark which branches have commits at this level
+        // Mark which branches have commits at this level and below
         for (int i = 0; i < commit_count; i++) {
-            if (commits[i].y_pos == y) {
+            if (commits[i].y_pos >= y) {
+                // Mark the branch line
                 branch_lines[commits[i].x_pos] = 1;
+                
+                // If this is a merge commit, mark the connection to its parents
+                if (commits[i].parent_count > 1) {
+                    for (int j = 0; j < commits[i].parent_count; j++) {
+                        for (int k = 0; k < commit_count; k++) {
+                            if (strcmp(commits[i].parent_hashes[j], commits[k].hash) == 0) {
+                                child_connections[commits[i].x_pos][commits[k].x_pos] = 1;
+                                child_connections[commits[k].x_pos][commits[i].x_pos] = 1;
+                                break;
+                            }
+                        }
+                    }
+                }
+                // For regular commits, mark connection to single parent
+                else if (commits[i].parent_count == 1) {
+                    for (int k = 0; k < commit_count; k++) {
+                        if (strcmp(commits[i].parent_hashes[0], commits[k].hash) == 0) {
+                            child_connections[commits[i].x_pos][commits[k].x_pos] = 1;
+                            child_connections[commits[k].x_pos][commits[i].x_pos] = 1;
+                            break;
+                        }
+                    }
+                }
             }
         }
         
         // Find commit at this y position
         for (int i = 0; i < commit_count; i++) {
             if (commits[i].y_pos == y) {
+                // Add initial indentation
+                if (commits[i].x_pos > 0) {
+                    strcat(line, "    ");  // Base indentation for non-root commits
+                }
+                
                 // Print branch lines before commit
-                for (int x = 0; x < commits[i].x_pos; x++) {
-                    if (branch_lines[x]) {
+                for (int x = 1; x < commits[i].x_pos; x++) {
+                    if (branch_lines[x] || child_connections[x][commits[i].x_pos]) {
                         strcat(line, "│   ");
                     } else {
                         strcat(line, "    ");
@@ -413,24 +450,36 @@ void print_commit_tree() {
                     }
                 }
                 
-                // Add commit representation
-                char commit_str[512];
+                // Add commit representation with hash
+                char commit_str[1024];
                 if (commits[i].is_merge) {
-                    sprintf(commit_str, "%s◆ %s%s ", colors[color_index], commits[i].short_hash, RESET_COLOR);
+                    sprintf(commit_str, "%s◆ %s%s ", colors[color_index], commits[i].hash, RESET_COLOR);
                 } else if (commits[i].is_pr) {
-                    sprintf(commit_str, "%s◉ %s (PR #%s)%s ", colors[color_index], 
-                            commits[i].short_hash, commits[i].pr_number, RESET_COLOR);
+                    sprintf(commit_str, "%s◉ %s%s ", colors[color_index], commits[i].hash, RESET_COLOR);
                 } else {
-                    sprintf(commit_str, "%s● %s%s ", colors[color_index], commits[i].short_hash, RESET_COLOR);
+                    sprintf(commit_str, "%s● %s%s ", colors[color_index], commits[i].hash, RESET_COLOR);
                 }
                 strcat(line, commit_str);
                 
                 // Add commit details
-                char details[512];
-                sprintf(details, "%s (%s, %s)", 
-                        commits[i].subject,
-                        commits[i].author,
-                        commits[i].date);
+                char details[2048];
+                if (commits[i].is_pr) {
+                    sprintf(details, "%s (PR #%s) (%s, %s)", 
+                            commits[i].subject,
+                            commits[i].pr_number,
+                            commits[i].author,
+                            commits[i].date);
+                } else if (commits[i].is_merge) {
+                    sprintf(details, "%s (Merge commit) (%s, %s)",
+                            commits[i].subject,
+                            commits[i].author,
+                            commits[i].date);
+                } else {
+                    sprintf(details, "%s (%s, %s)",
+                            commits[i].subject,
+                            commits[i].author,
+                            commits[i].date);
+                }
                 strcat(line, details);
                 
                 // Add branch labels if any
@@ -452,6 +501,57 @@ void print_commit_tree() {
                     strcat(line, "]");
                 }
                 
+                strcat(line, "\n");
+                
+                // Add full commit message if it exists and differs from subject
+                if (strlen(commits[i].full_message) > strlen(commits[i].subject)) {
+                    char *msg_ptr = commits[i].full_message;
+                    char *first_newline = strchr(msg_ptr, '\n');
+                    
+                    if (first_newline && *(first_newline + 1) != '\0') {
+                        // Skip the first line (subject) and any blank lines
+                        msg_ptr = first_newline + 1;
+                        while (*msg_ptr == '\n') msg_ptr++;
+                        
+                        if (*msg_ptr != '\0') {
+                            // Add indentation for the message
+                            char indent[128] = {0};
+                            if (commits[i].x_pos > 0) {
+                                strcat(indent, "    ");
+                            }
+                            for (int x = 1; x < commits[i].x_pos; x++) {
+                                if (branch_lines[x] || child_connections[x][commits[i].x_pos]) {
+                                    strcat(indent, "│   ");
+                                } else {
+                                    strcat(indent, "    ");
+                                }
+                            }
+                            strcat(indent, "    ");  // Extra indent for message
+                            
+                            // Add each line of the message with proper indentation
+                            char msg_line[1024];
+                            while (*msg_ptr) {
+                                char *newline = strchr(msg_ptr, '\n');
+                                if (newline) {
+                                    size_t len = newline - msg_ptr;
+                                    strncpy(msg_line, msg_ptr, len);
+                                    msg_line[len] = '\0';
+                                    msg_ptr = newline + 1;
+                                } else {
+                                    strcpy(msg_line, msg_ptr);
+                                    msg_ptr += strlen(msg_ptr);
+                                }
+                                
+                                if (strlen(msg_line) > 0) {
+                                    strcat(line, indent);
+                                    strcat(line, msg_line);
+                                    strcat(line, "\n");
+                                }
+                            }
+                        }
+                    }
+                }
+                
                 break;
             }
         }
@@ -459,14 +559,48 @@ void print_commit_tree() {
         // Add line to output buffer
         if (strlen(line) > 0) {
             strcat(output_buffer, line);
-            strcat(output_buffer, "\n");
+            
+            // Add branch lines for visual connection
+            if (y < commit_count - 1) {  // Don't add after last commit
+                char connection_line[1024] = {0};
+                int has_connections = 0;
+                
+                // Add initial indentation for non-root level
+                if (commits[y+1].x_pos > 0) {
+                    strcat(connection_line, "    ");
+                }
+                
+                // Add branch lines
+                for (int x = 1; x < max_x; x++) {
+                    int is_connected = 0;
+                    for (int j = 0; j < max_x; j++) {
+                        if (child_connections[x][j] || child_connections[j][x]) {
+                            is_connected = 1;
+                            break;
+                        }
+                    }
+                    
+                    if (branch_lines[x] || is_connected) {
+                        strcat(connection_line, "│   ");
+                        has_connections = 1;
+                    } else {
+                        strcat(connection_line, "    ");
+                    }
+                }
+                
+                // Only add connection line if there are actual connections
+                if (has_connections) {
+                    strcat(output_buffer, connection_line);
+                    strcat(output_buffer, "\n");
+                }
+            }
         }
         
         y++;
     }
     
-    // Use a pager to display the output
-    FILE *pager = popen("less -R", "w");
+    // Use less with proper options for git log-like experience
+    FILE *pager = popen("less -R +G", "w");
     if (pager) {
         fputs(output_buffer, pager);
         pclose(pager);
