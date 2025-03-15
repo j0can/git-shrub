@@ -11,6 +11,18 @@
 #define DATE_LENGTH 30
 #define DEBUG 0
 
+#define COMMIT_SYMBOL "●"
+#define MERGE_SYMBOL "◆"
+#define PR_SYMBOL    "◉"
+
+// Define structs first
+typedef struct {
+    char name[128];
+    char hash[41];
+    int color;
+    int x_pos;
+} Branch;
+
 typedef struct {
     char hash[41];
     char short_hash[8];
@@ -20,20 +32,19 @@ typedef struct {
     time_t timestamp;
     char refs[256];
     int is_merge;
+    char symbol[8];
     int is_pr;
     char pr_number[16];
+    int branch_index;
     int x_pos;
     int y_pos;
-    char parent_hashes[5][41];
     int parent_count;
+    char parent_hashes[5][41];
 } Commit;
 
-typedef struct {
-    char name[128];
-    char hash[41];
-    int color;
-    int x_pos;
-} Branch;
+// Then declare function prototypes
+void determine_commit_type(Commit *commit);
+void print_graph_lines(Commit *commit, Branch *branches);
 
 Commit commits[MAX_COMMITS];
 Branch branches[MAX_BRANCHES];
@@ -94,10 +105,12 @@ void parse_git_log() {
     // Modify the git log format to be more reliable
     // Use a custom separator that's unlikely to appear in commit messages
     snprintf(command, MAX_COMMAND_LENGTH, 
-             "git log --all --date=iso --pretty=format:\"COMMIT_SEP%%H|%%h|%%s|%%an|%%ad|%%P|%%D\" --graph");
+             "git log --all --graph --date=iso"
+             " --pretty=format:\"COMMIT_SEP%%H|%%h|%%s|%%an|%%ad|%%P|%%D\""
+             " --date-order --color=always");
     
     if (DEBUG) {
-    printf("Executing: %s\n", command);  // Debug output 
+        printf("Executing: %s\n", command);  // Debug output 
     }
     
     log_output = execute_command(command);
@@ -252,6 +265,7 @@ void parse_git_log() {
                         }
                     }
                     
+                    determine_commit_type(&commits[commit_count]);
                     commit_count++;
                 }
             }
@@ -359,15 +373,35 @@ void print_commit_tree() {
         }
     }
     
+    // Create a buffer for the entire output
+    char *output_buffer = malloc(MAX_COMMITS * MAX_LINE_LENGTH);
+    output_buffer[0] = '\0';
+    
     // Print the tree
     int y = 0;
     while (y < commit_count) {
-        // Print a row of the tree
         char line[1024] = {0};
+        int branch_lines[MAX_BRANCHES] = {0};
+        
+        // Mark which branches have commits at this level
+        for (int i = 0; i < commit_count; i++) {
+            if (commits[i].y_pos == y) {
+                branch_lines[commits[i].x_pos] = 1;
+            }
+        }
         
         // Find commit at this y position
         for (int i = 0; i < commit_count; i++) {
             if (commits[i].y_pos == y) {
+                // Print branch lines before commit
+                for (int x = 0; x < commits[i].x_pos; x++) {
+                    if (branch_lines[x]) {
+                        strcat(line, "│   ");
+                    } else {
+                        strcat(line, "    ");
+                    }
+                }
+                
                 // Get branch color
                 int color_index = 0;
                 for (int j = 0; j < branch_count; j++) {
@@ -375,11 +409,6 @@ void print_commit_tree() {
                         color_index = branches[j].color;
                         break;
                     }
-                }
-                
-                // Pad to x position
-                while (strlen(line) < commits[i].x_pos * 4) {
-                    strcat(line, "    ");
                 }
                 
                 // Add commit representation
@@ -396,76 +425,103 @@ void print_commit_tree() {
                 
                 // Add commit details
                 char details[512];
-                // Truncate subject if too long
-                char subject[64];
-                strncpy(subject, commits[i].subject, 63);
-                subject[63] = '\0';
-                if (strlen(commits[i].subject) > 63) {
-                    strcat(subject, "...");
-                }
-                
-                sprintf(details, "%s (%s, %s)", subject, commits[i].author, commits[i].date);
+                sprintf(details, "%s (%s, %s)", 
+                        commits[i].subject,
+                        commits[i].author,
+                        commits[i].date);
                 strcat(line, details);
                 
                 // Add branch labels if any
                 if (strlen(commits[i].refs) > 0) {
-                    char *ref_token;
-                    char refs_copy[256];
-                    strcpy(refs_copy, commits[i].refs);
-                    ref_token = strtok(refs_copy, ",");
-                    
-                    char branch_str[256] = {0};
-                    strcat(branch_str, " [");
-                    
+                    strcat(line, " [");
+                    char *ref_token = strtok(commits[i].refs, ",");
                     while (ref_token != NULL) {
-                        // Clean up ref name
-                        char *ref_name = ref_token;
-                        while (*ref_name == ' ') ref_name++;
-                        
-                        if (strstr(ref_name, "refs/heads/") != NULL) {
-                            ref_name += 11; // Skip "refs/heads/"
-                            strcat(branch_str, ref_name);
-                            strcat(branch_str, ", ");
-                        } else if (strstr(ref_name, "refs/tags/") != NULL) {
-                            ref_name += 10; // Skip "refs/tags/"
-                            strcat(branch_str, "tag: ");
-                            strcat(branch_str, ref_name);
-                            strcat(branch_str, ", ");
-                        } else if (strstr(ref_name, "refs/remotes/") != NULL) {
-                            ref_name += 13; // Skip "refs/remotes/"
-                            strcat(branch_str, "remote: ");
-                            strcat(branch_str, ref_name);
-                            strcat(branch_str, ", ");
-                        } else if (strlen(ref_name) > 0) {
-                            strcat(branch_str, ref_name);
-                            strcat(branch_str, ", ");
+                        while (*ref_token == ' ') ref_token++;
+                        if (strstr(ref_token, "refs/heads/") != NULL) {
+                            strcat(line, ref_token + 11);
+                        } else if (strstr(ref_token, "HEAD -> ") != NULL) {
+                            strcat(line, ref_token + 8);
+                        } else {
+                            strcat(line, ref_token);
                         }
-                        
                         ref_token = strtok(NULL, ",");
+                        if (ref_token != NULL) strcat(line, ", ");
                     }
-                    
-                    // Remove trailing comma and space
-                    int len = strlen(branch_str);
-                    if (len > 2 && branch_str[len-2] == ',' && branch_str[len-1] == ' ') {
-                        branch_str[len-2] = ']';
-                        branch_str[len-1] = '\0';
-                    } else {
-                        strcat(branch_str, "]");
-                    }
-                    
-                    strcat(line, branch_str);
+                    strcat(line, "]");
                 }
                 
                 break;
             }
         }
         
-        // Print the line
+        // Add line to output buffer
         if (strlen(line) > 0) {
-            printf("%s\n", line);
+            strcat(output_buffer, line);
+            strcat(output_buffer, "\n");
         }
         
         y++;
+    }
+    
+    // Use a pager to display the output
+    FILE *pager = popen("less -R", "w");
+    if (pager) {
+        fputs(output_buffer, pager);
+        pclose(pager);
+    } else {
+        printf("%s", output_buffer);
+    }
+    
+    free(output_buffer);
+}
+
+void determine_commit_type(Commit *commit) {
+    // Check for PR
+    if (strstr(commit->subject, "Merge pull request #") != NULL) {
+        strcpy(commit->symbol, PR_SYMBOL);
+        // Extract PR number
+        sscanf(strstr(commit->subject, "#"), "#%s", commit->pr_number);
+        commit->is_pr = 1;
+    }
+    // Check for merge commit
+    else if (strstr(commit->subject, "Merge") == commit->subject) {
+        strcpy(commit->symbol, MERGE_SYMBOL);
+        commit->is_merge = 1;
+    }
+    // Regular commit
+    else {
+        strcpy(commit->symbol, COMMIT_SYMBOL);
+    }
+}
+
+void print_commit_line(Commit *commit, Branch *branches, int branch_count) {
+    // Print graph connection lines
+    print_graph_lines(commit, branches);
+    
+    // Print commit symbol with color
+    printf("%s%s%s ", colors[branches[commit->branch_index].color], 
+           commit->symbol, RESET_COLOR);
+           
+    // Print commit info
+    printf("%s %.7s%s %s", 
+           colors[branches[commit->branch_index].color],
+           commit->hash,
+           RESET_COLOR,
+           commit->subject);
+           
+    // Print PR number if applicable
+    if (commit->is_pr) {
+        printf(" (PR #%s)", commit->pr_number);
+    }
+    
+    // Print author and date
+    printf(" (%s, %s)\n", commit->author, commit->date);
+}
+
+// Add print_graph_lines implementation
+void print_graph_lines(Commit *commit, Branch *branches) {
+    for (int i = 0; i < commit->x_pos; i++) {
+        printf("│ ");
     }
 }
 
