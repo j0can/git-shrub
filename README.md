@@ -13,6 +13,7 @@ A compact visualization tool for Git history that displays commits, branches, me
 - Displays commit hash, subject, author, and date information
 - Branch and tag labels
 - Works as a native Git subcommand
+- Reset functionality to undo commits while preserving changes
 
 ## Installation
 
@@ -66,6 +67,8 @@ make install  # May require sudo depending on installation location
 
 ## Usage
 
+### Viewing Git History
+
 Simply navigate to any Git repository and run:
 
 ```bash
@@ -74,16 +77,35 @@ git shrub
 
 The output will show a visual representation of your git history with all commits, branches, PRs, and dates formatted in a tree-like structure.
 
-## Example Output
+### Resetting Commits
+
+To remove the latest commit while preserving its changes (useful for modifying and recommitting):
+
+```bash
+git shrub -reset latest
+```
+
+This will:
+- Remove the most recent commit
+- Keep all the changes in your working directory
+- Allow you to modify the changes
+- Let you create a new commit with the modified changes
+
+After resetting, you can:
+1. Make any desired modifications to your code
+2. Stage your changes with `git add`
+3. Create a new commit with `git commit -m "Your new commit message"`
+
+### Example Output
 
 ```
-● abcd123 Initial commit (John Doe, 2023-03-01 10:00:00 +0000) [main]
-    ● efgh456 Add feature X (Jane Smith, 2023-03-02 11:30:00 +0000)
-    |   ● ijkl789 Fix bug in feature X (Jane Smith, 2023-03-03 09:15:00 +0000)
+● 82f75551c2bd8b33b8a61590851ed528fbd888e1 Initial commit (John Doe, 2023-03-01 10:00:00 +0000) [main]
+    ● 82f75551c2bd8b33b8a61590851ed528fbd888e1 Add feature X (Jane Smith, 2023-03-02 11:30:00 +0000)
+    |   ● 82f75551c2bd8b33b8a61590851ed528fbd888e1 Fix bug in feature X (Jane Smith, 2023-03-03 09:15:00 +0000)
     |   |
-    |   ◆ mnop012 Merge pull request #42 (John Doe, 2023-03-04 16:45:00 +0000)
+    |   ◆ 82f75551c2bd8b33b8a61590851ed528fbd888e1 Merge pull request #42 (John Doe, 2023-03-04 16:45:00 +0000)
     |
-    ● qrst345 Update documentation (Alice Johnson, 2023-03-05 14:20:00 +0000) [develop]
+    ● 82f75551c2bd8b33b8a61590851ed528fbd888e1 Update documentation (Alice Johnson, 2023-03-05 14:20:00 +0000) [develop]
 ```
 
 ## How It Works
