@@ -40,7 +40,7 @@ Enhancement suggestions are tracked as GitHub issues. When creating an enhanceme
 
 ## Development Process
 
-1. Fork the repo and create your branch from `main`
+1. Fork the repo and create your branch from `master`
 2. If you've added code that should be tested, add tests
 3. If you've changed APIs, update the documentation
 4. Ensure the test suite passes
@@ -51,7 +51,7 @@ Enhancement suggestions are tracked as GitHub issues. When creating an enhanceme
 
 1. Clone your fork of the repo
 ```bash
-git clone https://github.com/your-username/git-shrub
+git clone https://github.com/j0can/git-shrub
 ```
 
 2. Create a branch for local development
