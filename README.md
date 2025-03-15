@@ -1,184 +1,179 @@
-# Git Shrub
+# git-shrub 🌳
 
-A compact visualization tool for Git history that displays commits, branches, merges, and PRs with dates in a tree-like structure.
+A Git visualization tool that provides an enhanced view of your repository's commit history with additional useful Git commands.
 
 ## Features
 
-- Visual representation of Git commits with chronological layout
-- Color-coded branches for easy tracking
-- Special markers for different commit types:
-  - Regular commits (●)
-  - Merge commits (◆)
-  - Pull Requests (◉ with PR number)
-- Displays commit hash, subject, author, and date information
-- Branch and tag labels
-- Works as a native Git subcommand
-- Reset functionality to undo commits while preserving changes
-- Repository statistics with commit counts, author contributions, and file modifications
-- Detailed commit diff viewer with syntax highlighting
-- File history tracker to see all commits affecting a specific file
+- Beautiful commit tree visualization with:
+  - Full commit hashes for precise reference
+  - Colored branch lines for easy tracking
+  - Special symbols for different commit types:
+    - Regular commits (●)
+    - Merge commits (◆)
+    - Pull request merges (◉)
+  - Full commit messages with proper indentation
+  - Author and timestamp information
+  - Branch labels and Git references
+  - Interactive scrolling with pager support
+
+- Additional Git commands:
+  - Reset latest commit while preserving changes
+  - View repository statistics
+  - Examine specific commit changes
+  - Track file modification history
 
 ## Installation
 
-### Method 1: Using the Install Script (Recommended)
+### For Users
 
+1. Fork the repository by clicking the "Fork" button at the top right of the GitHub page
+2. Clone your forked repository:
 ```bash
-# Clone the repository
-git clone https://github.com/j0can/git-shrub.git
+git clone https://github.com/YOUR_USERNAME/git-shrub.git
 cd git-shrub
+```
 
-# Run the installer
+3. Run the installation script:
+```bash
 ./install.sh
 ```
 
-The installer will:
-- Compile the program
-- Allow you to choose where to install (system-wide or user-only)
-- Update your PATH if necessary
-- Provide usage instructions
+4. Choose installation option:
+   - System-wide installation (requires sudo)
+   - User-only installation (recommended)
 
-### Method 2: Manual Installation
-
-1. Compile the program:
+5. Add to PATH if necessary (for user-only installation):
 ```bash
-gcc -o git-shrub shrub.c
-```
-
-2. Make it executable and move it to a directory in your PATH:
-```bash
-chmod +x git-shrub
-cp git-shrub ~/.local/bin/  # or /usr/local/bin/ (requires sudo)
-```
-
-3. Make sure the directory is in your PATH:
-```bash
-# Add to ~/.bashrc or ~/.zshrc if needed
 export PATH="$PATH:$HOME/.local/bin"
-```
-
-### Method 3: Using Make
-
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/git-shrub.git
-cd git-shrub
-
-# Build and install
-make
-make install  # May require sudo depending on installation location
 ```
 
 ## Usage
 
-### Viewing Git History
+### Basic Commit Tree Visualization
 
-Simply navigate to any Git repository and run:
-
+Simply run in any Git repository:
 ```bash
 git shrub
 ```
 
-The output will show a visual representation of your git history with all commits, branches, PRs, and dates formatted in a tree-like structure.
+This will display an enhanced commit tree with:
+- Full commit hashes
+- Branch structure and relationships
+- Commit messages, authors, and dates
+- Special indicators for merge commits and pull requests
+- Branch labels and references
 
-### Viewing Repository Statistics
+### Additional Commands
 
-To see detailed statistics about your repository:
-
-```bash
-git shrub -stats
-```
-
-This will show:
-- Total number of commits
-- Commits per author
-- Number of active days
-- Total number of files
-- Most modified files (top 10)
-
-### Viewing Commit Changes
-
-To see the detailed changes in a specific commit:
-
-```bash
-git shrub -diff <commit-hash>
-```
-
-This will display:
-- Full commit information
-- Author and date details
-- Complete diff of all changed files
-- Syntax-highlighted output
-
-### Tracking File History
-
-To see all commits that modified a specific file:
-
-```bash
-git shrub -files <filename>
-```
-
-This will show:
-- Chronological list of commits
-- Commit hashes and messages
-- Author and date information
-- Follows file renames
-
-### Resetting Commits
-
-To remove the latest commit while preserving its changes (useful for modifying and recommitting):
-
+#### Reset Latest Commit
 ```bash
 git shrub -reset latest
 ```
+Removes the latest commit while preserving all changes in your working directory. Useful for:
+- Modifying your last commit
+- Combining changes with other updates
+- Changing commit messages
 
-This will:
-- Remove the most recent commit
-- Keep all the changes in your working directory
-- Allow you to modify the changes
-- Let you create a new commit with the modified changes
-
-After resetting, you can:
-1. Make any desired modifications to your code
-2. Stage your changes with `git add`
-3. Create a new commit with `git commit -m "Your new commit message"`
-
-### Example Output
-
+#### View Repository Statistics
+```bash
+git shrub -stats
 ```
-● 82f75551c2bd8b33b8a61590851ed528fbd888e1 Initial commit (John Doe, 2023-03-01 10:00:00 +0000) [main]
-    ● 82f75551c2bd8b33b8a61590851ed528fbd888e1 Add feature X (Jane Smith, 2023-03-02 11:30:00 +0000)
-    |   ● 82f75551c2bd8b33b8a61590851ed528fbd888e1 Fix bug in feature X (Jane Smith, 2023-03-03 09:15:00 +0000)
-    |   |
-    |   ◆ 82f75551c2bd8b33b8a61590851ed528fbd888e1 Merge pull request #42 (John Doe, 2023-03-04 16:45:00 +0000)
-    |
-    ● 82f75551c2bd8b33b8a61590851ed528fbd888e1 Update documentation (Alice Johnson, 2023-03-05 14:20:00 +0000) [develop]
+Shows detailed repository information:
+- Total number of commits
+- Commits per author
+- Active development days
+- File statistics
+- Most modified files
+
+#### Examine Commit Changes
+```bash
+git shrub -diff <commit-hash>
 ```
+Displays detailed information about a specific commit:
+- Changed files
+- Line-by-line modifications
+- Commit message and metadata
 
-## How It Works
-
-Git Shrub works by:
-1. Parsing `git log` output to extract commit information
-2. Identifying regular commits, merge commits, and PRs
-3. Assigning positions to branches and commits
-4. Rendering the tree with ANSI colors and Unicode symbols
+#### Track File History
+```bash
+git shrub -files <filename>
+```
+Shows the commit history for a specific file:
+- All commits that modified the file
+- Commit messages and authors
+- Timestamps of modifications
 
 ## Contributing
 
-Contributions are welcome! To contribute:
+We welcome contributions! Please follow these steps:
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+1. Fork the Repository
+   - Click the "Fork" button at the top right of the GitHub page
+   - This creates your own copy of the repository under your GitHub account
+   - Note: Direct cloning and pushing to the main repository is not allowed
 
-See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for more details.
+2. Set Up Your Fork
+   - Clone your forked repository:
+     ```bash
+     git clone https://github.com/YOUR_USERNAME/git-shrub.git
+     ```
+   - Add the original repository as upstream:
+     ```bash
+     git remote add upstream https://github.com/j0can/git-shrub.git
+     ```
+
+3. Keep Your Fork Updated
+   - Regularly sync your fork with the upstream:
+     ```bash
+     git fetch upstream
+     git checkout main
+     git merge upstream/main
+     ```
+
+4. Make Your Changes
+   - Create a new branch for your feature:
+     ```bash
+     git checkout -b feature/your-feature-name
+     ```
+   - Make your changes and commit them
+   - Push to your fork:
+     ```bash
+     git push origin feature/your-feature-name
+     ```
+
+5. Submit a Pull Request
+   - Go to your fork on GitHub
+   - Click "New Pull Request"
+   - Select your feature branch
+   - Describe your changes in detail
+   - Note: All PRs must be reviewed and approved before merging
+
+### Repository Access Rules
+
+- The main repository is private and can only be accessed through forks
+- Direct commits to the master branch are restricted
+- All changes must be submitted through Pull Requests
+- Pull Requests require review and approval
+- Only repository administrators can merge approved Pull Requests
+
+### Common Forking Issues and Solutions
+
+1. Out-of-Date Fork
+   - **Issue**: Your fork becomes outdated as the main repository evolves
+   - **Solution**: Regularly sync your fork with upstream (see step 3 above)
+
+2. Merge Conflicts
+   - **Issue**: Changes in your fork conflict with upstream changes
+   - **Solution**: Resolve conflicts locally after syncing with upstream
+
+3. Multiple Pull Requests
+   - **Issue**: Managing multiple feature branches
+   - **Solution**: Create separate branches for each feature/fix
+
+4. Branch Management
+   - **Issue**: Working on wrong branch
+   - **Solution**: Always create new feature branches from updated main
 
 ## License
 
-This project is licensed under the Apache License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- Inspired by git's built-in log visualization but focused on providing a more detailed view
-- GitHub Copilot (big help)
+[MIT License](LICENSE)
