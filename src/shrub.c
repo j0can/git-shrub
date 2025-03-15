@@ -4,6 +4,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#define VERSION "0.0.1"
 #define MAX_COMMAND_LENGTH 1024
 #define MAX_LINE_LENGTH 4096
 #define MAX_BRANCHES 100
@@ -700,12 +701,14 @@ int handle_reset_latest() {
 }
 
 void print_usage() {
+    printf("git-shrub version %s\n", VERSION);
     printf("Usage: git shrub [options]\n\n");
     printf("Options:\n");
     printf("  -reset latest         Unstage the latest commit (preserves changes)\n");
     printf("  -stats               Show repository statistics\n");
     printf("  -diff [commit]       Show changes in a specific commit\n");
     printf("  -files [filename]    Show commits that modified a specific file\n");
+    printf("  -version             Show version information\n");
     printf("  (no options)         Display the commit tree\n");
 }
 
@@ -804,6 +807,11 @@ int handle_files(const char* filename) {
 
 int main(int argc, char *argv[]) {
     // Check if git repository
+    if (argc > 1 && strcmp(argv[1], "-version") == 0) {
+        printf("git-shrub version %s\n", VERSION);
+        return EXIT_SUCCESS;
+    }
+    
     char *git_dir = execute_command("git rev-parse --git-dir 2>/dev/null");
     if (strlen(git_dir) == 0 || strstr(git_dir, "fatal:") != NULL) {
         fprintf(stderr, "Error: Not a git repository\n");
