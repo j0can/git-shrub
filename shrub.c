@@ -48,6 +48,9 @@ void determine_commit_type(Commit *commit);
 void print_graph_lines(Commit *commit, Branch *branches);
 void print_usage();
 int handle_reset_latest();
+int handle_stats();
+int handle_diff(const char* commit_hash);
+int handle_files(const char* filename);
 
 Commit commits[MAX_COMMITS];
 Branch branches[MAX_BRANCHES];
@@ -694,8 +697,104 @@ int handle_reset_latest() {
 void print_usage() {
     printf("Usage: git shrub [options]\n\n");
     printf("Options:\n");
-    printf("  -reset latest    Unstage the latest commit (preserves changes)\n");
-    printf("  (no options)     Display the commit tree\n");
+    printf("  -reset latest         Unstage the latest commit (preserves changes)\n");
+    printf("  -stats               Show repository statistics\n");
+    printf("  -diff [commit]       Show changes in a specific commit\n");
+    printf("  -files [filename]    Show commits that modified a specific file\n");
+    printf("  (no options)         Display the commit tree\n");
+}
+
+int handle_stats() {
+    char *output;
+    char command[MAX_COMMAND_LENGTH];
+    
+    printf("\nRepository Statistics:\n");
+    printf("====================\n\n");
+    
+    // Total number of commits
+    output = execute_command("git rev-list --count HEAD");
+    printf("Total commits: %s", output);
+    
+    // Commits per author
+    printf("\nCommits per author:\n");
+    snprintf(command, MAX_COMMAND_LENGTH, 
+             "git shortlog -sn --all");
+    output = execute_command(command);
+    printf("%s", output);
+    
+    // Active days
+    printf("\nRepository activity:\n");
+    snprintf(command, MAX_COMMAND_LENGTH,
+             "git log --format=%%ad --date=short | sort -u | wc -l");
+    output = execute_command(command);
+    printf("Active days: %s", output);
+    
+    // File statistics
+    printf("\nFile statistics:\n");
+    snprintf(command, MAX_COMMAND_LENGTH,
+             "git ls-files | wc -l");
+    output = execute_command(command);
+    printf("Total files: %s", output);
+    
+    // Most modified files
+    printf("\nMost modified files:\n");
+    snprintf(command, MAX_COMMAND_LENGTH,
+             "git log --pretty=format: --name-only | grep -v '^$' | sort | uniq -c | sort -rg | head -10");
+    output = execute_command(command);
+    printf("%s", output);
+    
+    return EXIT_SUCCESS;
+}
+
+int handle_diff(const char* commit_hash) {
+    char command[MAX_COMMAND_LENGTH];
+    char *output;
+    
+    // Verify commit hash exists
+    snprintf(command, MAX_COMMAND_LENGTH, "git rev-parse --verify %s", commit_hash);
+    output = execute_command(command);
+    if (strstr(output, "fatal:") != NULL) {
+        fprintf(stderr, "Error: Invalid commit hash\n");
+        return EXIT_FAILURE;
+    }
+    
+    // Show commit info
+    snprintf(command, MAX_COMMAND_LENGTH,
+             "git show --color=always %s", commit_hash);
+    output = execute_command(command);
+    
+    // Use pager for output
+    FILE *pager = popen("less -R", "w");
+    if (pager) {
+        fputs(output, pager);
+        pclose(pager);
+    } else {
+        printf("%s", output);
+    }
+    
+    return EXIT_SUCCESS;
+}
+
+int handle_files(const char* filename) {
+    char command[MAX_COMMAND_LENGTH];
+    char *output;
+    
+    // Show commits that modified the file
+    snprintf(command, MAX_COMMAND_LENGTH,
+             "git log --follow --pretty=format:'%%C(yellow)%%h%%Creset %%s (%%an, %%ad)' --date=iso -- %s",
+             filename);
+    output = execute_command(command);
+    
+    if (strlen(output) == 0) {
+        fprintf(stderr, "Error: No commits found for file '%s'\n", filename);
+        return EXIT_FAILURE;
+    }
+    
+    printf("\nCommit history for file: %s\n", filename);
+    printf("===============================\n\n");
+    printf("%s\n", output);
+    
+    return EXIT_SUCCESS;
 }
 
 int main(int argc, char *argv[]) {
@@ -714,7 +813,27 @@ int main(int argc, char *argv[]) {
                 return EXIT_FAILURE;
             }
             return handle_reset_latest();
-        } else {
+        }
+        else if (strcmp(argv[1], "-stats") == 0) {
+            return handle_stats();
+        }
+        else if (strcmp(argv[1], "-diff") == 0) {
+            if (argc != 3) {
+                fprintf(stderr, "Error: Please provide a commit hash\n");
+                print_usage();
+                return EXIT_FAILURE;
+            }
+            return handle_diff(argv[2]);
+        }
+        else if (strcmp(argv[1], "-files") == 0) {
+            if (argc != 3) {
+                fprintf(stderr, "Error: Please provide a filename\n");
+                print_usage();
+                return EXIT_FAILURE;
+            }
+            return handle_files(argv[2]);
+        }
+        else {
             print_usage();
             return EXIT_FAILURE;
         }
