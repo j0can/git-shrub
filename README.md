@@ -14,6 +14,9 @@ A compact visualization tool for Git history that displays commits, branches, me
 - Branch and tag labels
 - Works as a native Git subcommand
 - Reset functionality to undo commits while preserving changes
+- Repository statistics with commit counts, author contributions, and file modifications
+- Detailed commit diff viewer with syntax highlighting
+- File history tracker to see all commits affecting a specific file
 
 ## Installation
 
@@ -76,6 +79,49 @@ git shrub
 ```
 
 The output will show a visual representation of your git history with all commits, branches, PRs, and dates formatted in a tree-like structure.
+
+### Viewing Repository Statistics
+
+To see detailed statistics about your repository:
+
+```bash
+git shrub -stats
+```
+
+This will show:
+- Total number of commits
+- Commits per author
+- Number of active days
+- Total number of files
+- Most modified files (top 10)
+
+### Viewing Commit Changes
+
+To see the detailed changes in a specific commit:
+
+```bash
+git shrub -diff <commit-hash>
+```
+
+This will display:
+- Full commit information
+- Author and date details
+- Complete diff of all changed files
+- Syntax-highlighted output
+
+### Tracking File History
+
+To see all commits that modified a specific file:
+
+```bash
+git shrub -files <filename>
+```
+
+This will show:
+- Chronological list of commits
+- Commit hashes and messages
+- Author and date information
+- Follows file renames
 
 ### Resetting Commits
 
