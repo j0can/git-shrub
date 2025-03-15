@@ -2,7 +2,6 @@
 
 Thank you for considering contributing to Git Shrub!
 
-
 ## How Can I Contribute?
 
 ### Reporting Bugs
